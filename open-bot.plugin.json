@@ -1,0 +1,112 @@
+{
+  "$schema": "/home/agent/.config/opencode/skills/plugin/open-bot.plugin.schema.json",
+  "id": "effectcraft-video",
+  "name": "EffectCraft Video",
+  "version": "beta-1",
+  "description": "Motion-graphics videos (After Effects-class) driven headlessly by the Video Creator persona. The EffectCraft MCP server sits behind a token gate: locked with zero tools for every thread, unlocked only while a Video Creator session is open. Comps, keyframes, 306 effects, h264/ProRes/WebM/Lottie export, CPU render.",
+  "author": "shpaw415",
+  "repo": "shpaw415/effectcraft-video",
+  "category": "video",
+  "tags": [
+    "video",
+    "motion-graphics",
+    "effectcraft",
+    "mcp",
+    "render"
+  ],
+  "skills": [
+    {
+      "name": "effectcraft-video",
+      "description": "Load when making motion-graphics videos (animated titles, lower thirds, logo stings, kinetic text, compositing) with EffectCraft in a Video Creator thread; covers the gated session lifecycle, build/render workflow and pitfalls.",
+      "body": "# EffectCraft video — motion graphics for open-bot\n\nMake After Effects-class motion graphics by driving EffectCraft headlessly through its MCP server (the `effectcraft` tools): animated titles, lower thirds, logo stings, kinetic text, compositing, explainers. EffectCraft does not generate footage — create stills with the desktop's image-generation skill (or use the user's files), then animate them here.\n\n## If the effectcraft tools are not in your tool list\nRight after install (before the desktop restarts once), the MCP server may not be wired into\nyour session yet. Do NOT improvise JSON-RPC plumbing against effectcraft-cli itself — that\nbypasses the lock. The sanctioned fallback drives the gate directly:\n`ob-plugin-effectcraft-video-mcp gate` speaks MCP JSON-RPC over stdio (one message per line)\nwith the same lock enforcement: initialize, then tools/call — refused while locked, exactly\nlike the registered server.\n\n## Load only for the Video Creator persona\nThis skill and the gated MCP exist for the **Video Creator** persona. In any other thread: do not open sessions and do not call effectcraft tools — tell the user the Video Creator persona handles motion graphics and offer to start that thread.\n\n## Hard rules\n1. Session lifecycle: `ob-plugin-effectcraft-video-mcp status` -> `open` before the first MCP call -> work -> `close` after delivering. The gate refuses every call while locked or expired — run `open` again if expired. Never leave a session open.\n2. If status says effectcraft-cli is missing: reinstall the plugin (its setup installs the EffectCraft deb), then re-check. Do not improvise installers.\n3. Answer in the user's language. Confirm the plan (text, duration, resolution, fps) before rendering more than ~30 s of 1080p — rendering is CPU-only and slow.\n4. Deliverables go to the workspace output directory; show them in chat as ![description](path).\n\n## Workflow\n1. Plan: comp.new {name, width, height, frameRate, duration}.\n2. Build: layer.newText / newSolid / newShape / newNull (always pass \"name\"); animate with add_keyframe (pass \"timeBase\":\"comp\"); style with add_effect {layer, effect, values}.\n3. Verify: render_frame {\"time\": t, \"max_side\": 640} — READ the returned PNG and judge it; iterate before spending a long render.\n4. Final: renderQueue.add {comp, format:\"h264\", output:\"<outdir>/name.mp4\"} then renderQueue.render {\"wait\": true}. Confirm the file exists, then embed it.\n5. `ob-plugin-effectcraft-video-mcp close`.\n\n## Recipes (each step is one tool call)\n- Title sting: comp.new -> layer.newText -> add_keyframe position+scale (interpolation \"easyEase\") -> add_effect Glow -> render_frame check -> render.\n- Ken Burns on a still: file.import -> add_keyframe scale [100]->[112] plus a slow position drift across the comp duration -> render.\n- Lower third: text + shape bar; stagger opacity/position keys per element.\n- Motion without keys: set_property {\"expression\": \"wiggle(2,30)\"}.\n\n## Pitfalls (each cost real agent hours)\n- add_keyframe / set_property times are LAYER time; get_property / render_frame take COMP time. Always pass \"timeBase\":\"comp\" for wall-clock timing.\n- Headless sessions are shared desktop-wide and reaped after ~15 min idle: save_project after every milestone or work is lost.\n- Name layers at creation; reference them by name, never by guessed id.\n- batch {steps} makes multi-step edits atomic; a script that throws keeps its earlier edits — wrap scripts in app.beginUndoGroup()/endUndoGroup().\n- Missing media after open: execute_command {\"command\":\"footage.check\",\"params\":{\"wait\":true}}.\n- Discover anything: list_commands {filter} and describe_command; list_effects covers all 306 effects; list_fonts for text.\n\n## No companion required\nWorks standalone. Image generation is optional for footage; if unavailable, ask the user for stills. No ffmpeg needed — EffectCraft encodes MP4/ProRes/WebM itself.\n"
+    },
+    {
+      "name": "effectcraft-doctor",
+      "description": "Load when EffectCraft video renders fail, the MCP gate behaves oddly, or the user asks to check the video tooling; runs the status CLI, interprets lock state and smoke-tests headless rendering.",
+      "body": "# EffectCraft doctor — diagnose the video pipeline\n\nLoad when renders fail, the gate behaves oddly, or the user asks to check the video tooling.\n\nRun `ob-plugin-effectcraft-video-mcp status` and interpret:\n- effectcraft \"not installed\" -> reinstall the plugin (`ob-plugin install effectcraft-video`, or `--path` for local dev) so its setup runs; then re-check. Never hand-roll installers.\n- gate LOCKED -> normal outside the Video Creator persona. Only a Video Creator thread may open it.\n- gate EXPIRED -> run `open` again in the Video Creator thread.\n- gate OPEN but calls fail -> read the gate.log tail in the status output; [ec] lines are the EffectCraft backend's own stderr.\n\nSmoke test (only with a session open) — render one frame headless:\n`effectcraft-cli exec comp.new --params '{\"name\":\"Smoke\",\"width\":640,\"height\":360,\"duration\":1}' --empty --save-as /tmp/ec-smoke.ecproj && effectcraft-cli render-frame /tmp/ec-smoke.ecproj --time 0.3 --out /tmp/ec-smoke.png`\nA viewable PNG means the pipeline is healthy. Remove the temp files afterwards.\n\nText renders wrong or empty? Check fonts: `fc-list | wc -l` — 0 means no fonts; the plugin setup installs fontconfig + dejavu-core, so reinstall if missing.\n\nReport a short verdict in the user's language, quoting the exact failing command if unhealthy.\n"
+    }
+  ],
+  "personas": [
+    {
+      "name": "Video Creator",
+      "instruction": "You are Video Creator, the open-bot motion-graphics persona. You make animated titles, lower thirds, logo stings, kinetic text and compositing videos by driving EffectCraft (an After Effects-class compositor) headlessly through its MCP server.\n\nHard lifecycle: `ob-plugin-effectcraft-video-mcp status`, then `open`; build comps (comp.new, layer.newText/newSolid/newShape, add_keyframe with timeBase \"comp\", add_effect); verify with render_frame (read the PNG) before any final render; export h264 into the workspace output directory; always `close` when done. The gate refuses every call while locked — by design: it unlocks only for you.\n\nGenerate still footage with the desktop's image-generation skill when the project needs it; otherwise ask the user for files. Confirm the plan (text, duration, resolution, fps) before renders longer than ~30 s of 1080p. Deliver files from the workspace and embed them in your reply. Answer in the user's language.\n\nDirect like an art director: strong, simple motion; named layers; one comp per scene; precompose long projects."
+    }
+  ],
+  "tools": [
+    {
+      "name": "mcp",
+      "content": "#!/usr/bin/env bun\n// effectcraft-video — session-lock CLI for the EffectCraft MCP gate.\n//\n//   ob-plugin-effectcraft-video open [--ttl N]   unlock the MCP for this thread's work\n//   ob-plugin-effectcraft-video close            lock it again (always do this after rendering)\n//   ob-plugin-effectcraft-video status           lock state, EffectCraft version, gate log tail\n//\n// The gate (MCP server) reads ~/.open-bot/plugin-effectcraft-video/session.json;\n// this CLI is the only writer. No secrets involved.\nimport { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from \"node:fs\";\n\nconst HOME = process.env.HOME || \"/home/agent\";\nconst STATE_DIR = `${HOME}/.open-bot/plugin-effectcraft-video`;\nconst SESSION_FILE = `${STATE_DIR}/session.json`;\nconst LOG_FILE = `${STATE_DIR}/gate.log`;\nconst CONFIG_FILE = `${HOME}/.config/open-bot/plugin-effectcraft-video.json`;\n\nfunction settings(): Record<string, string> {\n  try { return JSON.parse(readFileSync(CONFIG_FILE, \"utf8\")).settings || {}; } catch { return {}; }\n}\nfunction defaultTtlMinutes(): number {\n  const n = Number(settings().ttl_minutes ?? 120);\n  return Number.isFinite(n) && n > 0 ? n : 120;\n}\nfunction cliPath(): string | null { return Bun.which(\"effectcraft-cli\"); }\nfunction cliVersion(): string {\n  const p = cliPath();\n  if (!p) return \"not installed\";\n  try {\n    const r = Bun.spawnSync([p, \"--version\"]);\n    return r.stdout.toString().trim() || \"installed (version unknown)\";\n  } catch { return \"installed (version check failed)\"; }\n}\nfunction session(): { expires: number } | null {\n  try {\n    const s = JSON.parse(readFileSync(SESSION_FILE, \"utf8\"));\n    return typeof s.expires === \"number\" ? s : null;\n  } catch { return null; }\n}\nfunction isOpen(): boolean { const s = session(); return !!s && s.expires > Date.now(); }\nfunction gateLogTail(lines = 8): string[] {\n  try {\n    return readFileSync(LOG_FILE, \"utf8\").trimEnd().split(\"\\n\").slice(-lines);\n  } catch { return []; }\n}\n\nconst [, , cmd = \"status\"] = process.argv;\n\nif (cmd === \"open\") {\n  const ttlIdx = process.argv.indexOf(\"--ttl\");\n  const explicit = ttlIdx > -1 ? Number(process.argv[ttlIdx + 1]) : undefined;\n  const minutes = Math.min(1440, Math.max(1, explicit && Number.isFinite(explicit) ? explicit : defaultTtlMinutes()));\n  if (!cliPath()) {\n    console.error(\"effectcraft-cli is NOT installed. Reinstall the plugin (its setup installs the EffectCraft deb), then retry.\");\n    process.exit(1);\n  }\n  mkdirSync(STATE_DIR, { recursive: true });\n  const expires = Date.now() + minutes * 60_000;\n  writeFileSync(SESSION_FILE, JSON.stringify({ expires, openedAt: new Date().toISOString() }, null, 2));\n  console.log(`EffectCraft MCP session OPEN for ${minutes} min (until ${new Date(expires).toISOString()}).`);\n  console.log(\"Work through the effectcraft MCP tools, then run `ob-plugin-effectcraft-video-mcp close` when the render is delivered.\");\n  process.exit(0);\n}\n\nif (cmd === \"close\") {\n  try { rmSync(SESSION_FILE); } catch { /* already closed */ }\n  console.log(\"EffectCraft MCP session CLOSED (gate locked).\");\n  process.exit(0);\n}\n\nif (cmd === \"gate\") {\n  // Fallback endpoint: speak MCP JSON-RPC (one message per line) through the gate's lock.\n  // For threads whose tool list does not show effectcraft_* yet (e.g. right after install,\n  // before the desktop restarts). Same enforcement as the registered MCP server.\n  const gate = `${process.env.HOME || \"/home/agent\"}/.open-bot/plugin-effectcraft-video/gate.ts`;\n  const gatePath = existsSync(gate) ? gate : \"/usr/local/bin/ob-plugin-effectcraft-video-gate.ts\";\n  const child = Bun.spawn([\"bun\", gatePath], { stdin: \"inherit\", stdout: \"inherit\", stderr: \"inherit\" });\n  process.exit(await child.exited);\n}\n\nif (cmd === \"status\") {\n  const s = session();\n  const open = isOpen();\n  const minsLeft = open && s ? Math.max(0, Math.round((s.expires - Date.now()) / 60_000)) : 0;\n  console.log(`gate:        ${open ? `OPEN (${minsLeft} min left)` : s ? \"EXPIRED (run open again)\" : \"LOCKED\"}`);\n  console.log(`effectcraft: ${cliVersion()}`);\n  console.log(`settings:    ttl_minutes=${settings().ttl_minutes ?? \"120 (default)\"} autosave=${settings().autosave ?? \"true (default)\"}`);\n  const tail = gateLogTail();\n  if (tail.length) console.log(`gate.log (last ${tail.length}):\\n  ` + tail.join(\"\\n  \"));\n  process.exit(0);\n}\n\nconsole.error(\"usage: ob-plugin-effectcraft-video-mcp open [--ttl N] | close | status | gate\");\nprocess.exit(2);\n",
+      "exec": true
+    }
+  ],
+  "files": [
+    {
+      "name": "gate.ts",
+      "source": "gate/gate.ts",
+      "exec": true
+    },
+    {
+      "name": "install.sh",
+      "source": "setup/install.sh",
+      "exec": true
+    }
+  ],
+  "configs": [
+    {
+      "key": "ttl_minutes",
+      "label": "MCP session TTL (minutes)",
+      "type": "number",
+      "def": "120",
+      "min": 5,
+      "max": 1440
+    },
+    {
+      "key": "autosave",
+      "label": "EffectCraft autosave checkpoints",
+      "type": "bool",
+      "def": "true"
+    }
+  ],
+  "setup": {
+    "commands": [
+      "bash /usr/local/bin/ob-plugin-effectcraft-video-install.sh"
+    ],
+    "uninstall": [
+      "apt-get remove -y effectcraft 2>/dev/null || true",
+      "rm -rf /home/agent/.open-bot/plugin-effectcraft-video"
+    ]
+  },
+  "opencode": {
+    "mcp": {
+      "effectcraft": {
+        "type": "local",
+        "command": [
+          "bun",
+          "/usr/local/bin/ob-plugin-effectcraft-video-gate.ts"
+        ],
+        "enabled": true
+      }
+    },
+    "agents": {
+      "effectcraft-worker": {
+        "description": "EffectCraft motion-graphics worker. Builds one assigned stage (comp, layers, keyframes, effects) through the gated effectcraft MCP tools and verifies it with rendered frames.",
+        "mode": "all",
+        "hidden": true,
+        "steps": 96,
+        "prompt": "You are the EffectCraft worker for exactly one motion-graphics stage assigned by the orchestrator thread. The orchestrator manages the session lock — never run ob-plugin-effectcraft-video-mcp open/close yourself; if MCP calls come back locked, end with RESULT: LOCKED. Drive EffectCraft only through the effectcraft MCP tools: name layers at creation, use timeBase \"comp\" for keyframe times, one comp per scene, save_project after each milestone. Verify your stage with render_frame {\"max_side\":640} and read the image before declaring the stage done. Write outputs under the workspace output directory. End your reply with exactly one line starting with RESULT: summarizing what was built and the files written."
+      }
+    },
+    "agentTools": {
+      "build": {
+        "effectcraft_*": false
+      },
+      "title": {
+        "effectcraft_*": false
+      },
+      "namer": {
+        "effectcraft_*": false
+      }
+    },
+    "agentsMd": "## EffectCraft MCP discipline (plugin: effectcraft-video)\n- The effectcraft MCP server is token-gated by the effectcraft-video plugin: while no session is open it exposes zero tools and refuses every call. It exists ONLY for the Video Creator persona.\n- Never call effectcraft_* tools outside a Video Creator thread. If a motion-graphics or video task arrives elsewhere, say the Video Creator persona handles it and offer to start that thread.\n- In a Video Creator thread: `ob-plugin-effectcraft-video-mcp open` before the first effectcraft call, `close` after the render is delivered. Never leave a session open.\n- Renders are CPU-only and slow at 1080p: preview with render_frame (max_side 640) before any final render, and confirm scope with the user for long renders.\n- Save deliverables under the workspace output directory and show them in the reply."
+  }
+}

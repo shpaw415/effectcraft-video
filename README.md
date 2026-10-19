@@ -66,7 +66,8 @@ No vault keys, no secrets, no accounts.
 
 ## Notes
 
-- EffectCraft is alpha software (first release October 2026) and moves fast; setup always
-  installs the latest release. Behaviours can change upstream between versions.
+- EffectCraft is alpha software (first release October 2026) and moves fast. Setup installs a
+  **pinned** version (0.11.1, SHA256-verified against the release's SHA256SUMS.txt); plugin
+  releases bump the pin deliberately after testing.
 - First MCP use spawns a headless EffectCraft on the CPU; startup is instant, long renders are not.
 - EffectCraft and Adobe After Effects are unrelated; EffectCraft is an independent open-source project.

@@ -8,7 +8,7 @@ compositor written in Rust — running **headlessly** over its MCP server.
 
 - Animated titles, lower thirds, logo stings, kinetic text, compositing, explainers.
 - Comps, layers, keyframes, 306 effects, expressions, render queue.
-- Export h264 MP4, ProRes, WebM, Lottie. Pure-Rust encoders, no ffmpeg dependency.
+- Export h264 MP4, ProRes, WebM, Lottie. Pure-Rust encoders (rendering needs no ffmpeg); setup installs ffmpeg anyway for post steps (voiceover mux).
 - CPU rendering (works on any desktop, no GPU needed).
 
 ## The persona gate (the point of this plugin)

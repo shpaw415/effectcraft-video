@@ -54,6 +54,7 @@ once. Reinstalling the plugin re-runs setup only if the CLI is missing.
 |---|---|---|
 | `ttl_minutes` | `120` | How long an open session stays unlocked before auto-expiring (5–1440). |
 | `autosave` | `true` | Passes `--autosave` to the headless server so unsaved work is checkpointed. |
+| `tool_profile` | `lean` | `lean` exposes 17 workflow tools (lighter context); `full` exposes all 27. Non-listed features stay reachable via `execute_command`. |
 
 No vault keys, no secrets, no accounts.
 

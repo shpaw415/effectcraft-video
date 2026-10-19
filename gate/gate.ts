@@ -32,6 +32,16 @@ function settings(): Record<string, string> {
   try { return JSON.parse(readFileSync(CONFIG_FILE, "utf8")).settings || {}; } catch { return {}; }
 }
 function autosaveEnabled(): boolean { return (settings().autosave ?? "true") !== "false"; }
+function toolProfile(): "lean" | "full" { return settings().tool_profile === "full" ? "full" : "lean"; }
+
+// lean profile: the Video Creator workflow's tools only. Everything else stays reachable
+// through execute_command / run_script (any engine command id), so nothing is lost (lean profile by default).
+const LEAN_TOOLS = new Set([
+  "list_commands", "describe_command", "execute_command", "run_script", "batch",
+  "get_state", "get_comp", "get_layer", "get_property", "set_property",
+  "add_keyframe", "add_effect", "render_frame", "list_effects",
+  "save_project", "open_project", "undo",
+]);
 
 type JsonRpcId = number | string | null;
 interface Msg { jsonrpc: "2.0"; id?: JsonRpcId; method?: string; params?: any; result?: any; error?: any }
@@ -259,7 +269,10 @@ rl.on("line", (line) => {
 
   if (method === "tools/list") {
     if (!LIST_WHILE_LOCKED && !open) { result(id, { tools: [] }); return; }
-    realTools().then((tools) => result(id, { tools }));
+    realTools().then((tools) => {
+      const profile = toolProfile();
+      result(id, { tools: profile === "lean" ? tools.filter((t: any) => LEAN_TOOLS.has(t?.name)) : tools });
+    });
     return;
   }
   if (method === "tools/call") {

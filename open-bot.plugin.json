@@ -2,7 +2,7 @@
   "$schema": "/home/agent/.config/opencode/skills/plugin/open-bot.plugin.schema.json",
   "id": "effectcraft-video",
   "name": "EffectCraft Video",
-  "version": "beta-4",
+  "version": "0.1.0",
   "description": "Motion-graphics videos (After Effects-class) driven headlessly by the Video Creator persona. The EffectCraft MCP server sits behind a token gate: locked with zero tools for every thread, unlocked only while a Video Creator session is open. Comps, keyframes, 306 effects, h264/ProRes/WebM/Lottie export, CPU render.",
   "author": "shpaw415",
   "repo": "shpaw415/effectcraft-video",

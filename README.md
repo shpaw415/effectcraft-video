@@ -44,9 +44,10 @@ ob-plugin install effectcraft-video        # marketplace (when published)
 ob-plugin install --path ~/plugins-create/effectcraft-video   # local dev
 ```
 
-Setup downloads the latest EffectCraft `.deb` from GitHub releases and installs it with
-`apt-get` (idempotent; skips if `effectcraft-cli` is already present). Needs network access
-once. Reinstalling the plugin re-runs setup only if the CLI is missing.
+Setup downloads a **pinned** EffectCraft `.deb` (version 0.11.1) from GitHub releases,
+verifies its SHA256 against the release's `SHA256SUMS.txt` before installing, and installs
+it with `apt-get` (idempotent; skips if `effectcraft-cli` is already present). Needs network
+access once. Reinstalling the plugin re-runs setup only if the CLI is missing.
 
 ## Settings
 
